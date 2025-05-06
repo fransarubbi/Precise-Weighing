@@ -1,30 +1,23 @@
 #include "sistema.h"
+#include "eventos.h"
 #include "sapi.h"
 
 
 #define	cTicksBas	500
 
 
-extern bool_t ePuestaMarcha;
-extern bool_t eParada;
-extern bool_t eRearme;
-extern bool_t eL1;
-extern bool_t eL2;
-extern bool_t eCero;
-bool_t eFin;
-bool_t eFinEmergencia;
-bool_t eError;
+static Evento evento;
+static delay_t vDelayBas;
 bool_t timerInt;
 bool_t timerFlag;
 bool_t inFlag;
+bool_t flagVaciado;
 uint8_t basFlag;
-uint8_t flagVaciado;
-static delay_t	vDelayBas;
 
 
 
 /*
- * Funciones para el timer
+ * Funciones para los timers
  */
 void timers_Init(void) {
 
@@ -105,6 +98,7 @@ void TIMER3_IRQHandler(void) {
  * GPIO0 -> C1
  * GPIO2 -> C2
  * GPIO4 -> Basculante
+ * GPIO1 -> BasculanteTope
  */
 static void aC1(aC1_t accion){
 	switch (accion){
@@ -200,7 +194,6 @@ void disable_timer_IRQ(aTimer_t flagTimer) {
 		Chip_TIMER_Disable(LPC_TIMER3);
 		break;
 	}
-
 }
 
 
@@ -208,9 +201,10 @@ void disable_timer_IRQ(aTimer_t flagTimer) {
  * Funciones de estado
  */
 void state_ESPERA(StateMachine* sm){
-	if (ePuestaMarcha) {
-		ePuestaMarcha = 0;
-		enter_ANDANDO(sm, 1);
+	if (consult(&colaEventos, &evento)) {
+		if(evento == ePuestaMarcha){
+			enter_NO_PRECISO(sm);
+		}
 	}
 }
 
@@ -227,24 +221,25 @@ void state_NO_PRECISO(StateMachine* sm){
 	}
 	Chip_TIMER_Enable(LPC_TIMER0);
 
-
-	if ((timerInt == 0) && eL1) {
-		eL1 = 0;
-		disable_timer_IRQ(timer0);
-		aC1(cOffC1);
-		transition_to(sm, state_PRECISO, PRECISO);
+	if(consult(&colaEventos, &evento)){
+		if ((timerInt == 0) && (evento == eL1)) {
+			supress(&colaEventos);
+			disable_timer_IRQ(timer0);
+			aC1(cOffC1);
+			transition_to(sm, state_PRECISO, PRECISO);
+		}
+		if (evento == eParada) {
+			sm->history_PESADO = NO_PRECISO;
+			disable_timer_IRQ(timer0);
+			enter_STOP(sm, 0);
+		}
 	}
+
 	if (timerInt) {
 		timerInt = 0;
 		disable_timer_IRQ(timer0);
-		eError = 1;
+		insert(&colaEventos, eError);
 		enter_STOP(sm, 1);
-	}
-	if (eParada) {
-		eParada = 0;
-		sm->history_PESADO = NO_PRECISO;
-		disable_timer_IRQ(timer0);
-		enter_STOP(sm, 0);
 	}
 }
 
@@ -261,22 +256,24 @@ void state_PRECISO(StateMachine* sm){
 	}
 	Chip_TIMER_Enable(LPC_TIMER1);
 
-	if((timerInt == 0) && eL2){
-		eL2 = 0;
-		disable_timer_IRQ(timer1);
-		enter_VACIADO(sm);
+	if(consult(&colaEventos, &evento)){
+		if((timerInt == 0) && (evento == eL2)){
+			supress(&colaEventos);
+			disable_timer_IRQ(timer1);
+			enter_VACIADO(sm);
+		}
+		if(evento == eParada){
+			sm->history_PESADO = PRECISO;
+			disable_timer_IRQ(timer1);
+			enter_STOP(sm, 0);
+		}
 	}
+
 	if(timerInt){
 		timerInt = 0;
 		disable_timer_IRQ(timer1);
-		eError = 1;
+		insert(&colaEventos, eError);
 		enter_STOP(sm, 1);
-	}
-	if(eParada){
-		eParada = 0;
-		sm->history_PESADO = PRECISO;
-		disable_timer_IRQ(timer1);
-		enter_STOP(sm, 0);
 	}
 }
 
@@ -293,68 +290,73 @@ void state_VACIADO(StateMachine* sm){
 	}
 	Chip_TIMER_Enable(LPC_TIMER2);
 
-	if((timerInt == 0) && eCero){
-		eCero = 0;
-		disable_timer_IRQ(timer2);
-		aC1(cOffC1);
-		aC2(cOffC2);
-		aBasculante(cOffBas);
-		delayInit(&vDelayBas, cTicksBas);
-		inFlag = 1;
-		transition_to(sm, descargaBas, ESPERA);
-
+	if(consult(&colaEventos, &evento)){
+		if((timerInt == 0) && (evento == eCero)){
+			supress(&colaEventos);
+			disable_timer_IRQ(timer2);
+			aC1(cOffC1);
+			aC2(cOffC2);
+			aBasculante(cOffBas);
+			delayInit(&vDelayBas, cTicksBas);
+			inFlag = 1;
+			transition_to(sm, descargaBas, ESPERA);
+		}
+		if(evento == eParada){
+			sm->history_VACIADO = VACIADO;
+			disable_timer_IRQ(timer2);
+			enter_STOP(sm, 0);
+		}
 	}
+
 	if(timerInt){
 		timerInt = 0;
 		disable_timer_IRQ(timer2);
-		eError = 1;
+		insert(&colaEventos, eError);
 		enter_STOP(sm, 1);
-	}
-	if(eParada){
-		eParada = 0;
-		sm->history_VACIADO = VACIADO;
-		disable_timer_IRQ(timer2);
-		enter_STOP(sm, 0);
 	}
 }
 
 
 void state_PARADO(StateMachine* sm){
-	if(eRearme){
-		eRearme = 0;
-		aBasculante(cOnBas);
-		transition_to(sm, state_VACIADO_EMERGENCIA, VACIADO_EMERGENCIA);
-	}
-	if(ePuestaMarcha){
-		ePuestaMarcha = 0;
-		if(sm->history_VACIADO == STATE_NONE){
-			enter_ANDANDO(sm, 1);
+	if(consult(&colaEventos, &evento)){
+		if(evento == eRearme){
+			supress(&colaEventos);
+			aBasculante(cOnBas);
+			transition_to(sm, state_VACIADO_EMERGENCIA, VACIADO_EMERGENCIA);
 		}
-		else{
-			enter_ANDANDO(sm, 0);
+		if(evento == ePuestaMarcha){
+			if(sm->history_VACIADO == STATE_NONE){
+				enter_ANDANDO(sm, 1);
+			}
+			else{
+				enter_ANDANDO(sm, 0);
+			}
 		}
 	}
 }
 
 
 void state_ERRONEO(StateMachine* sm){
-	if(eRearme){
-		eRearme = 0;
-		eError = 0;
-		aBasculante(cOnBas);
-		transition_to(sm, state_VACIADO_EMERGENCIA, VACIADO_EMERGENCIA);
+	if(consult(&colaEventos, &evento)){
+		if(evento == eRearme){
+			supress(&colaEventos);
+			aBasculante(cOnBas);
+			transition_to(sm, state_VACIADO_EMERGENCIA, VACIADO_EMERGENCIA);
+		}
 	}
 }
 
 
 void state_VACIADO_EMERGENCIA(StateMachine* sm){
-	if(eCero){
-		eCero = 0;
-		aBasculante(cOffBas);
-		delayInit(&vDelayBas, cTicksBas);
-		inFlag = 1;
-		flagVaciado = 1;
-		transition_to(sm, descargaBas, ESPERA);
+	if(consult(&colaEventos, &evento)){
+		if(evento == eCero){
+			supress(&colaEventos);
+			aBasculante(cOffBas);
+			delayInit(&vDelayBas, cTicksBas);
+			inFlag = 1;
+			flagVaciado = 1;
+			transition_to(sm, descargaBas, ESPERA);
+		}
 	}
 }
 
@@ -382,12 +384,12 @@ void descargaBas(StateMachine* sm){
 			aBasculante(cOffBas);
 			if(flagVaciado){
 				flagVaciado = 0;
-				eFinEmergencia = 1;
+				insert(&colaEventos, eFinEmergencia);
 			}
 			disable_timer_IRQ(timer3);
 			sm->history_PESADO = STATE_NONE;
 			sm->history_VACIADO = STATE_NONE;
-			enter_ANDANDO(sm, 1);
+			enter_NO_PRECISO(sm);
 		}
 	}
 }
@@ -396,14 +398,6 @@ void descargaBas(StateMachine* sm){
 /*
  * Funciones de transiciones entre jerarquias
  */
-void enter_ESPERA(StateMachine* sm){
-	aC1(cOffC1);
-	aC2(cOffC2);
-	aBasculante(cOffBas);
-	init_FSM(sm);
-}
-
-
 void enter_ANDANDO(StateMachine* sm, bool_t flagAndando) {
     sm->current = ANDANDO;
     if(flagAndando){
@@ -489,7 +483,6 @@ void run_state_machine(StateMachine* sm){
 /*
  * Funciones de inicializacion
  */
-
 void init_FSM(StateMachine* sm){
 	sm->history_PESADO = STATE_NONE;
 	sm->history_VACIADO = STATE_NONE;
@@ -498,9 +491,6 @@ void init_FSM(StateMachine* sm){
 
 
 void init_Sistema(void){
-	eFin = 0;
-	eFinEmergencia = 0;
-	eError = 0;
 	timerInt = 0;
 	basFlag = 0;
 	timerFlag = 0;

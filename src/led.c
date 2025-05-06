@@ -1,24 +1,20 @@
 #include "led.h"
 #include "button.h"
+#include "eventos.h"
 #include "sapi.h"
 
 
-#define	cTicksLed	250
+#define	cTicksLed	150
 
 
 static enum {REPOSO,PRENDIDO,TITILA} estado_actual;
 static enum {APAGADO,ENCENDIDO} estado_actual_titila;
 static delay_t	vTickLed;
+static Evento evento;
 
 
-// Variable externas
-extern bool_t ePuestaMarcha;
-extern bool_t eFinEmergencia;
-extern bool_t eError;
-extern bool_t eParada;
 
-
-// FUNCIONES privadas
+// Funcion privada
 static void aLed(aLed_t accion){
 	switch (accion){
 	case cInit:
@@ -37,42 +33,52 @@ static void aLed(aLed_t accion){
 }
 
 
-// FUNCIONES PRIVADAS
+// Funciones Globales
 void InitMefTitila(void){
 	aLed(cOff);
 	delayInit(&vTickLed,cTicksLed);
 	estado_actual_titila = APAGADO;
 }
 
-// FUNCIONES GLOBALES
+
 void InitMefLed( void ){
 	aLed(cInit);
 	estado_actual = REPOSO;
 	InitMefTitila();
 }
 
+
 void ActualizarMefLed(void){
 	switch (estado_actual){
 	case REPOSO:
-		if (ePuestaMarcha){
-			estado_actual = PRENDIDO;
-			aLed(cOn);
+		if(consult(&colaEventos, &evento)){
+			if(evento == ePuestaMarcha){
+				supress(&colaEventos);
+				estado_actual = PRENDIDO;
+				aLed(cOn);
+			}
 		}
 		break;
 
 	case PRENDIDO:
-		if (eError || eParada){
-			estado_actual = TITILA;
-			InitMefTitila();
-			delayRead(&vTickLed);
+		if(consult(&colaEventos, &evento)){
+			if((evento == eError) || (evento == eParada)){
+				supress(&colaEventos);
+				estado_actual = TITILA;
+				InitMefTitila();
+				delayRead(&vTickLed);
+			}
 		}
 		break;
 
 	case TITILA:
-		if (ePuestaMarcha || eFinEmergencia){
-			estado_actual = PRENDIDO;
-			estado_actual_titila = APAGADO;
-			aLed(cOn);
+		if(consult(&colaEventos, &evento)){
+			if((evento == ePuestaMarcha) || (evento == eFinEmergencia)){
+				supress(&colaEventos);
+				estado_actual = PRENDIDO;
+				estado_actual_titila = APAGADO;
+				aLed(cOn);
+			}
 		}
 
 		switch (estado_actual_titila){
@@ -89,7 +95,9 @@ void ActualizarMefLed(void){
 				aLed(cOff);
 				delayRead(&vTickLed);
 			}
+			break;
 		}
+		break;
 	}
 }
 

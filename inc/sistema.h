@@ -49,17 +49,16 @@ void state_PESADO(StateMachine*);
 void state_VACIADO(StateMachine*);
 void state_PRECISO(StateMachine*);
 void state_NO_PRECISO(StateMachine*);
-void descargaBas(StateMachine* sm);
+void descargaBas(StateMachine*);
 
 
 // Prototipo de funciones de transiciones entre jerarquias
 void enter_ANDANDO(StateMachine*, bool_t);
 void enter_PESADO(StateMachine*);
 void enter_NO_PRECISO(StateMachine*);
-void enter_STOP(StateMachine*, bool_t);
-void enter_ESPERA(StateMachine*);
-void enter_VACIADO(StateMachine*);
 void enter_PRECISO(StateMachine*);
+void enter_STOP(StateMachine*, bool_t);
+void enter_VACIADO(StateMachine*);
 
 
 // Ejecuciones
@@ -74,5 +73,6 @@ void init_Sistema(void);    // Inicializar el sistema
 
 // Auxiliar
 void disable_timer_IRQ(aTimer_t);
+
 
 #endif /* SISTEMA_H_ */

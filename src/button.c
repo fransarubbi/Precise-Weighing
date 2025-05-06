@@ -1,8 +1,8 @@
 #include "button.h"
+#include "eventos.h"
 #include "sapi.h"
 
 #define	cDelayDebounce 80
-
 
 enum Button {WAIT,DEBOUNCE,PRESS};
 enum Button est_act_PM;    //puesta en marcha
@@ -12,14 +12,6 @@ enum Button est_act_L1;    //peso L1
 enum Button est_act_L2;    //peso L2
 enum Button est_act_Cero;  //peso cero
 
-
-//	Variables Globales
-bool_t ePuestaMarcha;
-bool_t eRearme;
-bool_t eParada;
-bool_t eL1;
-bool_t eL2;
-bool_t eCero;
 
 
 //	Variables Privadas
@@ -48,19 +40,12 @@ void InitMefButton(void){
 	est_act_L1 = WAIT;
 	est_act_L2 = WAIT;
 	est_act_Cero = WAIT;
-	ePuestaMarcha = 0;
-	eRearme = 0;
-	eParada = 0;
-	eL1 = 0;
-	eL2 = 0;
-	eCero = 0;
 }
 
 
 void ActualizarMefButton(void){
 	switch (est_act_PM){
 	case WAIT:
-		ePuestaMarcha = 0;
 		if (!gpioRead(TEC1)){
 			est_act_PM = DEBOUNCE;
 			delayRead(&vDelayDeb);
@@ -70,10 +55,9 @@ void ActualizarMefButton(void){
 		if (delayRead(&vDelayDeb)){
 			if (!gpioRead(TEC1)){
 				est_act_PM = PRESS;
-				ePuestaMarcha = 1;
+				insert(&colaEventos, ePuestaMarcha);
 			}else{
 				est_act_PM = WAIT;
-				ePuestaMarcha = 0;
 			}
 		}
 		break;
@@ -84,130 +68,120 @@ void ActualizarMefButton(void){
 	}
 
 	switch (est_act_P){
-		case WAIT:
-			eParada = 0;
+	case WAIT:
+		if (!gpioRead(TEC2)){
+			est_act_P = DEBOUNCE;
+			delayRead(&vDelayDeb);
+		}
+		break;
+	case DEBOUNCE:
+		if (delayRead(&vDelayDeb)){
 			if (!gpioRead(TEC2)){
-				est_act_P = DEBOUNCE;
-				delayRead(&vDelayDeb);
-			}
-			break;
-		case DEBOUNCE:
-			if (delayRead(&vDelayDeb)){
-				if (!gpioRead(TEC2)){
-					est_act_P = PRESS;
-					eParada = 1;
-				}else{
-					est_act_P = WAIT;
-					eParada = 0;
-				}
-			}
-			break;
-		case PRESS:
-			if (gpioRead(TEC2)){
+				est_act_P = PRESS;
+				insert(&colaEventos, eParada);
+			}else{
 				est_act_P = WAIT;
 			}
 		}
+		break;
+	case PRESS:
+		if (gpioRead(TEC2)){
+			est_act_P = WAIT;
+		}
+	}
 
 
 	switch (est_act_R){
-		case WAIT:
-			eRearme = 0;
+	case WAIT:
+		if (!gpioRead(TEC3)){
+			est_act_R = DEBOUNCE;
+			delayRead(&vDelayDeb);
+		}
+		break;
+	case DEBOUNCE:
+		if (delayRead(&vDelayDeb)){
 			if (!gpioRead(TEC3)){
-				est_act_R = DEBOUNCE;
-				delayRead(&vDelayDeb);
-			}
-			break;
-		case DEBOUNCE:
-			if (delayRead(&vDelayDeb)){
-				if (!gpioRead(TEC3)){
-					est_act_R = PRESS;
-					eRearme = 1;
-				}else{
-					est_act_R = WAIT;
-					eRearme = 0;
-				}
-			}
-			break;
-		case PRESS:
-			if (gpioRead(TEC3)){
+				est_act_R = PRESS;
+				insert(&colaEventos, eRearme);
+			}else{
 				est_act_R = WAIT;
 			}
+		}
+		break;
+	case PRESS:
+		if (gpioRead(TEC3)){
+			est_act_R = WAIT;
+		}
 	}
 
 
 	switch (est_act_L1){
-			case WAIT:
-				eL1 = 0;
-				if (!gpioRead(TEC4)){
-					est_act_L1 = DEBOUNCE;
-					delayRead(&vDelayDeb);
-				}
-				break;
-			case DEBOUNCE:
-				if (delayRead(&vDelayDeb)){
-					if (!gpioRead(TEC4)){
-						est_act_L1 = PRESS;
-						eL1 = 1;
-					}else{
-						est_act_L1 = WAIT;
-						eL1 = 0;
-					}
-				}
-				break;
-			case PRESS:
-				if (gpioRead(TEC4)){
-					est_act_L1 = WAIT;
-				}
+	case WAIT:
+		if (!gpioRead(TEC4)){
+			est_act_L1 = DEBOUNCE;
+			delayRead(&vDelayDeb);
 		}
+		break;
+	case DEBOUNCE:
+		if (delayRead(&vDelayDeb)){
+			if (!gpioRead(TEC4)){
+				est_act_L1 = PRESS;
+				insert(&colaEventos, eL1);
+			}else{
+				est_act_L1 = WAIT;
+			}
+		}
+		break;
+	case PRESS:
+		if (gpioRead(TEC4)){
+			est_act_L1 = WAIT;
+		}
+	}
 
 
 	switch (est_act_L2){
-				case WAIT:
-					eL2 = 0;
-					if (!gpioRead(GPIO6)){
-						est_act_L2 = DEBOUNCE;
-						delayRead(&vDelayDeb);
-					}
-					break;
-				case DEBOUNCE:
-					if (delayRead(&vDelayDeb)){
-						if (!gpioRead(GPIO6)){
-							est_act_L2 = PRESS;
-							eL2 = 1;
-						}else{
-							est_act_L2 = WAIT;
-							eL2 = 0;
-						}
-					}
-					break;
-				case PRESS:
-					if (gpioRead(GPIO6)){
-						est_act_L2 = WAIT;
-					}
+	case WAIT:
+		if (!gpioRead(GPIO6)){
+			est_act_L2 = DEBOUNCE;
+			delayRead(&vDelayDeb);
+		}
+		break;
+	case DEBOUNCE:
+		if (delayRead(&vDelayDeb)){
+			if (!gpioRead(GPIO6)){
+				est_act_L2 = PRESS;
+				insert(&colaEventos, eL2);
+			}else{
+				est_act_L2 = WAIT;
 			}
+		}
+		break;
+	case PRESS:
+		if (gpioRead(GPIO6)){
+			est_act_L2 = WAIT;
+		}
+	}
 
 	switch (est_act_Cero){
-					case WAIT:
-						eCero = 0;
-						if (!gpioRead(GPIO5)){
-							est_act_Cero = DEBOUNCE;
-							delayRead(&vDelayDeb);
-						}
-						break;
-					case DEBOUNCE:
-						if (delayRead(&vDelayDeb)){
-							if (!gpioRead(GPIO5)){
-								est_act_Cero = PRESS;
-								eCero = 1;
-							}else{
-								est_act_Cero = WAIT;
-								eCero = 0;
-							}
-						}
-						break;
-					case PRESS:
-						if (gpioRead(GPIO5)){
-							est_act_Cero = WAIT;
-						}
-				}
+	case WAIT:
+		if (!gpioRead(GPIO5)){
+			est_act_Cero = DEBOUNCE;
+			delayRead(&vDelayDeb);
+		}
+		break;
+	case DEBOUNCE:
+		if (delayRead(&vDelayDeb)){
+			if (!gpioRead(GPIO5)){
+				est_act_Cero = PRESS;
+				insert(&colaEventos, eCero);
+			}else{
+				est_act_Cero = WAIT;
+			}
+		}
+		break;
+	case PRESS:
+		if (gpioRead(GPIO5)){
+			est_act_Cero = WAIT;
+		}
+	}
 }
